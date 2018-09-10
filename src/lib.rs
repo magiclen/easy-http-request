@@ -6,9 +6,9 @@
 //! ```
 //! extern crate easy_http_request;
 //!
-//! use std::collections::HashMap;
+//! use easy_http_request::*;
 //!
-//! let response = easy_http_request::get("https://magiclen.org", None::<HashMap<&'static str, &'static str>>, None::<HashMap<&'static str, &'static str>>).unwrap();
+//! let response = easy_http_request::get("https://magiclen.org", QUERY_EMPTY, HEADERS_EMPTY).unwrap();
 //!
 //! println!("{}", response.status_code);
 //! println!("{:?}", response.headers);
@@ -57,6 +57,10 @@ pub enum HttpBody<BK: Eq + Hash + AsRef<str>, BV: AsRef<str>> {
     FormURLEncoded(HashMap<BK, BV>),
     // TODO Multi-part
 }
+
+pub const QUERY_EMPTY: Option<HashMap<&'static str, &'static str>> = None;
+pub const BODY_EMPTY: Option<HttpBody<&'static str, &'static str>> = None;
+pub const HEADERS_EMPTY: Option<HashMap<&'static str, &'static str>> = None;
 
 fn request<QK, QV, BK, BV, HK, HV>(method: &str, url: &str, query: Option<HashMap<QK, QV>>, body: Option<HttpBody<BK, BV>>, headers: Option<HashMap<HK, HV>>) -> Result<HttpResponse, HttpRequestError>
     where QK: Eq + Hash + AsRef<str>, QV: AsRef<str>,
@@ -204,13 +208,13 @@ mod tests {
 
     #[test]
     fn test_head() {
-        head("http://example.com", None::<HashMap<&'static str, &'static str>>, None::<HashMap<&'static str, &'static str>>).unwrap();
-        head("https://magiclen.org", None::<HashMap<&'static str, &'static str>>, None::<HashMap<&'static str, &'static str>>).unwrap();
+        head("http://example.com", QUERY_EMPTY, HEADERS_EMPTY).unwrap();
+        head("https://magiclen.org", QUERY_EMPTY, HEADERS_EMPTY).unwrap();
     }
 
     #[test]
     fn test_get() {
-        get("http://example.com", None::<HashMap<&'static str, &'static str>>, None::<HashMap<&'static str, &'static str>>).unwrap();
-        get("https://magiclen.org", None::<HashMap<&'static str, &'static str>>, None::<HashMap<&'static str, &'static str>>).unwrap();
+        get("http://example.com", QUERY_EMPTY, HEADERS_EMPTY).unwrap();
+        get("https://magiclen.org", QUERY_EMPTY, HEADERS_EMPTY).unwrap();
     }
 }

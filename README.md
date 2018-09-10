@@ -11,9 +11,9 @@ Easy to send HTTP/HTTPS requests.
 ```rust
 extern crate easy_http_request;
 
-use std::collections::HashMap;
+use easy_http_request::*;
 
-let response = easy_http_request::get("https://magiclen.org", None::<HashMap<&'static str, &'static str>>, None::<HashMap<&'static str, &'static str>>).unwrap();
+let response = easy_http_request::get("https://magiclen.org", QUERY_EMPTY, HEADERS_EMPTY).unwrap();
 
 println!("{}", response.status_code);
 println!("{:?}", response.headers);
