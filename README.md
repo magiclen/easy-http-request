@@ -2,6 +2,7 @@ Easy HTTP Request
 ====================
 
 [![Build Status](https://travis-ci.org/magiclen/easy-http-request.svg?branch=master)](https://travis-ci.org/magiclen/easy-http-request)
+[![Build status](https://ci.appveyor.com/api/projects/status/3o434rc48i9g850d/branch/master?svg=true)](https://ci.appveyor.com/project/magiclen/easy-http-request/branch/master)
 
 Easy to send HTTP/HTTPS requests.
 
