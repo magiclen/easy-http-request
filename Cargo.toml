@@ -1,0 +1,22 @@
+[package]
+name = "easy-http-request"
+version = "0.0.1"
+authors = ["Magic Len <len@magiclen.org>"]
+repository = "https://github.com/magiclen/easy-http-request"
+homepage = "https://magiclen.org/easy-http-request"
+keywords = ["http", "https", "request"]
+categories = ["web-programming::http-client"]
+description= "Easy to send HTTP/HTTPS requests."
+readme = "README.md"
+license = "MIT"
+
+[badges]
+travis-ci = { repository = "magiclen/easy-http-request", branch = "master" }
+appveyor = { repository = "magiclen/easy-http-request", branch = "master", service = "github" }
+
+[dependencies]
+url = "1.7.1"
+http = "0.1.12"
+hyper = "0.12.9"
+tokio-core = "0.1.17"
+hyper-tls = "0.3.0"
