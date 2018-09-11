@@ -172,13 +172,13 @@ fn request<QK, QV, BK, BV, HK, HV>(method: &str, url: &str, query: Option<HashMa
 pub fn head<QK, QV, HK, HV>(url: &str, query: Option<HashMap<QK, QV>>, headers: Option<HashMap<HK, HV>>) -> Result<HttpResponse, HttpRequestError>
     where QK: Eq + Hash + AsRef<str>, QV: AsRef<str>,
           HK: Eq + Hash + AsRef<str>, HV: AsRef<str> {
-    request("HEAD", url, query, None::<HttpBody<&'static str, &'static str>>, headers)
+    request("HEAD", url, query, BODY_EMPTY, headers)
 }
 
 pub fn get<QK, QV, HK, HV>(url: &str, query: Option<HashMap<QK, QV>>, headers: Option<HashMap<HK, HV>>) -> Result<HttpResponse, HttpRequestError>
     where QK: Eq + Hash + AsRef<str>, QV: AsRef<str>,
           HK: Eq + Hash + AsRef<str>, HV: AsRef<str> {
-    request("GET", url, query, None::<HttpBody<&'static str, &'static str>>, headers)
+    request("GET", url, query, BODY_EMPTY, headers)
 }
 
 pub fn post<QK, QV, BK, BV, HK, HV>(url: &str, query: Option<HashMap<QK, QV>>, body: Option<HttpBody<BK, BV>>, headers: Option<HashMap<HK, HV>>) -> Result<HttpResponse, HttpRequestError>
