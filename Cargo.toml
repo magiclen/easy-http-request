@@ -1,6 +1,6 @@
 [package]
 name = "easy-http-request"
-version = "0.0.3"
+version = "0.0.4"
 authors = ["Magic Len <len@magiclen.org>"]
 repository = "https://github.com/magiclen/easy-http-request"
 homepage = "https://magiclen.org/easy-http-request"
@@ -16,7 +16,7 @@ appveyor = { repository = "magiclen/easy-http-request", branch = "master", servi
 
 [dependencies]
 url = "1.7.1"
-http = "0.1.12"
-hyper = "0.12.9"
+http = "0.1.13"
+hyper = "0.12.10"
 hyper-tls = "0.3.0"
 tokio-core = "0.1.17"

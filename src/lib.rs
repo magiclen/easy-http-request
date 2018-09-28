@@ -69,7 +69,7 @@ fn request<QK, QV, BK, BV, HK, HV>(method: &str, url: &str, query: Option<HashMa
     let mut request_builder = Request::builder();
 
     request_builder.method(method);
-    request_builder.header("User-Agent", "my-awesome-agent/1.0");
+    request_builder.header("User-Agent", concat!("Mozilla/5.0 (Rust; magiclen.org) EasyHyperRequest/", env!("CARGO_PKG_VERSION")));
 
     match query {
         Some(map) => {
@@ -103,13 +103,13 @@ fn request<QK, QV, BK, BV, HK, HV>(method: &str, url: &str, query: Option<HashMa
         Some(body) => {
             match body {
                 HttpBody::Binary((content_type, vec)) => {
-                    request_builder.header("content-type", content_type);
-                    request_builder.header("content-length", vec.len().to_string());
+                    request_builder.header("Content-Type", content_type);
+                    request_builder.header("Content-Length", vec.len().to_string());
                     request_builder.body(Body::from(vec)).map_err(|err| HttpRequestError::HttpError(err))?
                 }
                 HttpBody::Text((content_type, text)) => {
-                    request_builder.header("content-type", content_type);
-                    request_builder.header("content-length", text.len().to_string());
+                    request_builder.header("Content-Type", content_type);
+                    request_builder.header("Content-Length", text.len().to_string());
                     request_builder.body(Body::from(text.into_bytes())).map_err(|err| HttpRequestError::HttpError(err))?
                 }
                 HttpBody::FormURLEncoded(map) => {
@@ -129,8 +129,8 @@ fn request<QK, QV, BK, BV, HK, HV>(method: &str, url: &str, query: Option<HashMa
                         }
                     };
 
-                    request_builder.header("content-type", "x-www-form-urlencoded");
-                    request_builder.header("content-length", query.len().to_string());
+                    request_builder.header("Content-Type", "x-www-form-urlencoded");
+                    request_builder.header("Content-Length", query.len().to_string());
 
                     request_builder.body(Body::from(query)).map_err(|err| HttpRequestError::HttpError(err))?
                 }
