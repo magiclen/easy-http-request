@@ -8,7 +8,7 @@
 //!
 //! use easy_http_request::*;
 //!
-//! let response = easy_http_request::get("https://magiclen.org", QUERY_EMPTY, HEADERS_EMPTY).unwrap();
+//! let response = easy_http_request::get("https://magiclen.org", 1 * 1024 * 1024, QUERY_EMPTY, HEADERS_EMPTY).unwrap();
 //!
 //! println!("{}", response.status_code);
 //! println!("{:?}", response.headers);
@@ -20,6 +20,7 @@ pub extern crate http;
 pub extern crate hyper;
 pub extern crate hyper_tls;
 pub extern crate tokio_core;
+pub extern crate futures;
 
 use tokio_core::reactor;
 use hyper::Client;
@@ -27,6 +28,7 @@ use hyper::Body;
 use hyper::rt::Stream;
 use hyper_tls::HttpsConnector;
 use http::Request;
+use futures::future::Future;
 use url::Url;
 use std::collections::HashMap;
 use std::cmp::Eq;
@@ -48,6 +50,7 @@ pub enum HttpRequestError {
     HyperError(hyper::Error),
     IOError(io::Error),
     FromUtf8Error(string::FromUtf8Error),
+    TooLarge,
     Other(&'static str),
 }
 
@@ -62,7 +65,7 @@ pub const QUERY_EMPTY: Option<HashMap<&'static str, &'static str>> = None;
 pub const BODY_EMPTY: Option<HttpBody<&'static str, &'static str>> = None;
 pub const HEADERS_EMPTY: Option<HashMap<&'static str, &'static str>> = None;
 
-fn request<QK, QV, BK, BV, HK, HV>(method: &str, url: &str, query: Option<HashMap<QK, QV>>, body: Option<HttpBody<BK, BV>>, headers: Option<HashMap<HK, HV>>) -> Result<HttpResponse, HttpRequestError>
+fn request<QK, QV, BK, BV, HK, HV>(method: &str, url: &str, max_body_size: usize, query: Option<HashMap<QK, QV>>, body: Option<HttpBody<BK, BV>>, headers: Option<HashMap<HK, HV>>) -> Result<HttpResponse, HttpRequestError>
     where QK: Eq + Hash + AsRef<str>, QV: AsRef<str>,
           BK: Eq + Hash + AsRef<str>, BV: AsRef<str>,
           HK: Eq + Hash + AsRef<str>, HV: AsRef<str> {
@@ -160,7 +163,8 @@ fn request<QK, QV, BK, BV, HK, HV>(method: &str, url: &str, query: Option<HashMa
 
     let status_code = response.status().as_u16();
 
-    let body = core.run(response.into_body().concat2()).map_err(|err| HttpRequestError::HyperError(err))?.to_vec();
+    let body = core.run(get_body(response.into_body(), max_body_size))?;
+//    let body = core.run(response.into_body().concat2()).map_err(|err| HttpRequestError::HyperError(err))?.to_vec();
 
     Ok(HttpResponse {
         status_code,
@@ -169,37 +173,60 @@ fn request<QK, QV, BK, BV, HK, HV>(method: &str, url: &str, query: Option<HashMa
     })
 }
 
+fn get_body(body: hyper::Body, max_body_size: usize) -> Box<Future<Item=Vec<u8>, Error=HttpRequestError>> {
+    let mut sum_size = 0;
+    let chain = body.then(move |c| {
+        let c = c.map_err(|err| HttpRequestError::HyperError(err))?;
+        {
+            let c_ref = c.as_ref();
+            sum_size += c_ref.len();
+        }
+        let result = if sum_size > max_body_size {
+            Err(HttpRequestError::TooLarge)
+        } else {
+            Ok(c)
+        };
+        result
+    });
+
+    let full_body = chain.concat2()
+        .map(|chunk| {
+            chunk.to_vec()
+        });
+    Box::new(full_body)
+}
+
 pub fn head<QK, QV, HK, HV>(url: &str, query: Option<HashMap<QK, QV>>, headers: Option<HashMap<HK, HV>>) -> Result<HttpResponse, HttpRequestError>
     where QK: Eq + Hash + AsRef<str>, QV: AsRef<str>,
           HK: Eq + Hash + AsRef<str>, HV: AsRef<str> {
-    request("HEAD", url, query, BODY_EMPTY, headers)
+    request("HEAD", url, 0, query, BODY_EMPTY, headers)
 }
 
-pub fn get<QK, QV, HK, HV>(url: &str, query: Option<HashMap<QK, QV>>, headers: Option<HashMap<HK, HV>>) -> Result<HttpResponse, HttpRequestError>
+pub fn get<QK, QV, HK, HV>(url: &str, max_body_size: usize, query: Option<HashMap<QK, QV>>, headers: Option<HashMap<HK, HV>>) -> Result<HttpResponse, HttpRequestError>
     where QK: Eq + Hash + AsRef<str>, QV: AsRef<str>,
           HK: Eq + Hash + AsRef<str>, HV: AsRef<str> {
-    request("GET", url, query, BODY_EMPTY, headers)
+    request("GET", url, max_body_size, query, BODY_EMPTY, headers)
 }
 
-pub fn post<QK, QV, BK, BV, HK, HV>(url: &str, query: Option<HashMap<QK, QV>>, body: Option<HttpBody<BK, BV>>, headers: Option<HashMap<HK, HV>>) -> Result<HttpResponse, HttpRequestError>
-    where QK: Eq + Hash + AsRef<str>, QV: AsRef<str>,
-          BK: Eq + Hash + AsRef<str>, BV: AsRef<str>,
-          HK: Eq + Hash + AsRef<str>, HV: AsRef<str> {
-    request("POST", url, query, body, headers)
-}
-
-pub fn put<QK, QV, BK, BV, HK, HV>(url: &str, query: Option<HashMap<QK, QV>>, body: Option<HttpBody<BK, BV>>, headers: Option<HashMap<HK, HV>>) -> Result<HttpResponse, HttpRequestError>
+pub fn post<QK, QV, BK, BV, HK, HV>(url: &str, max_body_size: usize, query: Option<HashMap<QK, QV>>, body: Option<HttpBody<BK, BV>>, headers: Option<HashMap<HK, HV>>) -> Result<HttpResponse, HttpRequestError>
     where QK: Eq + Hash + AsRef<str>, QV: AsRef<str>,
           BK: Eq + Hash + AsRef<str>, BV: AsRef<str>,
           HK: Eq + Hash + AsRef<str>, HV: AsRef<str> {
-    request("PUT", url, query, body, headers)
+    request("POST", url, max_body_size, query, body, headers)
 }
 
-pub fn delete<QK, QV, BK, BV, HK, HV>(url: &str, query: Option<HashMap<QK, QV>>, body: Option<HttpBody<BK, BV>>, headers: Option<HashMap<HK, HV>>) -> Result<HttpResponse, HttpRequestError>
+pub fn put<QK, QV, BK, BV, HK, HV>(url: &str, max_body_size: usize, query: Option<HashMap<QK, QV>>, body: Option<HttpBody<BK, BV>>, headers: Option<HashMap<HK, HV>>) -> Result<HttpResponse, HttpRequestError>
     where QK: Eq + Hash + AsRef<str>, QV: AsRef<str>,
           BK: Eq + Hash + AsRef<str>, BV: AsRef<str>,
           HK: Eq + Hash + AsRef<str>, HV: AsRef<str> {
-    request("DELETE", url, query, body, headers)
+    request("PUT", url, max_body_size, query, body, headers)
+}
+
+pub fn delete<QK, QV, BK, BV, HK, HV>(url: &str, max_body_size: usize, query: Option<HashMap<QK, QV>>, body: Option<HttpBody<BK, BV>>, headers: Option<HashMap<HK, HV>>) -> Result<HttpResponse, HttpRequestError>
+    where QK: Eq + Hash + AsRef<str>, QV: AsRef<str>,
+          BK: Eq + Hash + AsRef<str>, BV: AsRef<str>,
+          HK: Eq + Hash + AsRef<str>, HV: AsRef<str> {
+    request("DELETE", url, max_body_size, query, body, headers)
 }
 
 #[cfg(test)]
@@ -214,7 +241,7 @@ mod tests {
 
     #[test]
     fn test_get() {
-        get("http://example.com", QUERY_EMPTY, HEADERS_EMPTY).unwrap();
-        get("https://magiclen.org", QUERY_EMPTY, HEADERS_EMPTY).unwrap();
+        get("http://example.com", 1 * 1024 * 1024, QUERY_EMPTY, HEADERS_EMPTY).unwrap();
+        get("https://magiclen.org", 1 * 1024 * 1024, QUERY_EMPTY, HEADERS_EMPTY).unwrap();
     }
 }

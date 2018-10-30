@@ -1,6 +1,6 @@
 [package]
 name = "easy-http-request"
-version = "0.0.4"
+version = "0.0.5"
 authors = ["Magic Len <len@magiclen.org>"]
 repository = "https://github.com/magiclen/easy-http-request"
 homepage = "https://magiclen.org/easy-http-request"
@@ -20,3 +20,4 @@ http = "0.1.13"
 hyper = "0.12.10"
 hyper-tls = "0.3.0"
 tokio-core = "0.1.17"
+futures = "0.1.25"

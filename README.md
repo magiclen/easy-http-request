@@ -13,7 +13,7 @@ extern crate easy_http_request;
 
 use easy_http_request::*;
 
-let response = easy_http_request::get("https://magiclen.org", QUERY_EMPTY, HEADERS_EMPTY).unwrap();
+let response = easy_http_request::get("https://magiclen.org", 1 * 1024 * 1024, QUERY_EMPTY, HEADERS_EMPTY).unwrap();
 
 println!("{}", response.status_code);
 println!("{:?}", response.headers);
