@@ -17,7 +17,7 @@ appveyor = { repository = "magiclen/easy-http-request", branch = "master", servi
 [dependencies]
 url = "1.7.1"
 http = "0.1.13"
-hyper = "0.12.10"
+hyper = "<0.12.13"
 hyper-tls = "0.3.0"
 tokio-core = "0.1.17"
 futures = "0.1.25"
