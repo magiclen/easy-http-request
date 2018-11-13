@@ -11,14 +11,16 @@ Easy to send HTTP/HTTPS requests.
 ```rust
 extern crate easy_http_request;
 
-use easy_http_request::*;
+use easy_http_request::DefaultHttpRequest;
 
-let response = easy_http_request::get("https://magiclen.org", 1 * 1024 * 1024, QUERY_EMPTY, HEADERS_EMPTY).unwrap();
+let response = DefaultHttpRequest::get_from_url_str("https://magiclen.org").unwrap().send().unwrap();
 
 println!("{}", response.status_code);
 println!("{:?}", response.headers);
 println!("{}", String::from_utf8(response.body).unwrap());
 ```
+
+More examples are in the `examples` directory.
 
 ## Crates.io
 
