@@ -73,7 +73,7 @@ pub enum HttpRequestError {
 /// Use strings for query, body and headers.
 pub type DefaultHttpRequest = HttpRequest<String, String, String, String, String, String>;
 
-/// Use static string slice for query, body and headers.
+/// Use static string slices for query, body and headers.
 pub type StaticHttpRequest = HttpRequest<&'static str, &'static str, &'static str, &'static str, &'static str, &'static str>;
 
 /// The http request sender. See `DefaultHttpRequest` or `StaticHttpRequest`.
