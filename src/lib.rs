@@ -27,6 +27,7 @@ pub extern crate hyper_tls;
 pub extern crate tokio_core;
 pub extern crate futures;
 pub extern crate mime;
+pub extern crate slash_formatter;
 
 mod http_request_method;
 mod http_request_body;
@@ -39,6 +40,7 @@ use std::cmp::Eq;
 use std::hash::Hash;
 use std::io;
 use std::string;
+use std::fmt::Write;
 
 use tokio_core::reactor;
 use hyper::Client;
@@ -50,6 +52,7 @@ use futures::future::Future;
 use url::Url;
 
 const DEFAULT_MAX_RESPONSE_BODY_SIZE: usize = 1 * 1024 * 1024;
+const DEFAULT_MAX_REDIRECT_COUNT: usize = 5;
 
 /// The http response.
 #[derive(Debug)]
@@ -66,6 +69,8 @@ pub enum HttpRequestError {
     HyperError(hyper::Error),
     IOError(io::Error),
     FromUtf8Error(string::FromUtf8Error),
+    RedirectError(&'static str),
+    TooManyRedirect,
     TooLarge,
     Other(&'static str),
 }
@@ -87,6 +92,7 @@ pub struct HttpRequest<
     pub url: Url,
     /// The size limit of the response body.
     pub max_response_body_size: usize,
+    pub max_redirect_count: usize,
     pub query: Option<HashMap<QK, QV>>,
     pub body: Option<HttpRequestBody<BK, BV>>,
     pub headers: Option<HashMap<HK, HV>>,
@@ -101,6 +107,7 @@ impl<
             method,
             url,
             max_response_body_size: DEFAULT_MAX_RESPONSE_BODY_SIZE,
+            max_redirect_count: DEFAULT_MAX_REDIRECT_COUNT,
             query: None,
             body: None,
             headers: None,
@@ -159,10 +166,10 @@ impl<
 
     /// Send a request and drop this sender.
     pub fn send(self) -> Result<HttpResponse, HttpRequestError> {
-        Self::send_request_inner(self.method, self.url, self.max_response_body_size, &self.query, self.body, &self.headers)
+        Self::send_request_inner(self.method, self.url, self.max_response_body_size, self.max_redirect_count, &self.query, self.body, &self.headers)
     }
 
-    fn send_request_inner(method: HttpRequestMethod, mut url: Url, max_response_body_size: usize, query: &Option<HashMap<QK, QV>>, body: Option<HttpRequestBody<BK, BV>>, headers: &Option<HashMap<HK, HV>>) -> Result<HttpResponse, HttpRequestError> {
+    fn send_request_inner(method: HttpRequestMethod, mut url: Url, max_response_body_size: usize, max_redirect_count: usize, query: &Option<HashMap<QK, QV>>, body: Option<HttpRequestBody<BK, BV>>, headers: &Option<HashMap<HK, HV>>) -> Result<HttpResponse, HttpRequestError> {
         let mut request_builder = Request::builder();
 
         request_builder.method(method.get_str());
@@ -176,7 +183,7 @@ impl<
             }
         }
 
-        request_builder.uri(url.into_string());
+        request_builder.uri(url.to_string());
 
         match headers {
             Some(map) => {
@@ -187,8 +194,12 @@ impl<
             None => ()
         }
 
+        let mut has_body = false;
+
         let request = match body {
             Some(body) => {
+                has_body = true;
+
                 match body {
                     HttpRequestBody::Binary { content_type, body } => {
                         request_builder.header("Content-Type", content_type.to_string());
@@ -240,20 +251,90 @@ impl<
 
         let response = core.run(response).map_err(|err| HttpRequestError::HyperError(err))?;
 
-        let mut headers = HashMap::new();
+        let mut headers_raw_map = HashMap::new();
 
         for (name, value) in response.headers() {
-            headers.insert(name.as_str().to_string(), String::from_utf8(value.as_bytes().to_vec()).map_err(|err| HttpRequestError::FromUtf8Error(err))?);
+            headers_raw_map.insert(name.as_str().to_string(), String::from_utf8(value.as_bytes().to_vec()).map_err(|err| HttpRequestError::FromUtf8Error(err))?);
         }
 
         let status_code = response.status().as_u16();
+
+        if max_redirect_count > 0 {
+            if status_code / 100 == 3 {
+                let location_url = match headers_raw_map.get("location") {
+                    Some(location) => {
+                        match Url::parse(location) {
+                            Ok(mut location_url) => {
+                                if let Some(host) = url.host().as_ref() {
+                                    if location_url.host().is_none() {
+                                        let username = url.username();
+                                        if !username.is_empty() {
+                                            location_url.set_username(username).unwrap();
+                                        }
+
+                                        location_url.set_host(Some(&host.to_string())).unwrap();
+
+                                        if let Some(port) = url.port() {
+                                            location_url.set_port(Some(port)).unwrap();
+                                        }
+                                    }
+                                }
+
+                                location_url
+                            }
+                            Err(_) => {
+                                let mut location_url = String::new();
+                                location_url.push_str(url.scheme());
+                                location_url.push_str("://");
+                                if let Some(host) = url.host().as_ref() {
+                                    let username = url.username();
+                                    if !username.is_empty() {
+                                        location_url.push_str(username);
+                                        location_url.push('@');
+                                    }
+
+                                    location_url.push_str(&host.to_string());
+
+                                    if let Some(port) = url.port() {
+                                        location_url.write_fmt(format_args!(":{}", port)).unwrap();
+                                    }
+                                }
+
+                                slash_formatter::concat_with_slash_mut(&mut location_url, location);
+
+                                match Url::parse(&location_url) {
+                                    Ok(location_url) => location_url,
+                                    Err(_) => return Err(HttpRequestError::RedirectError("Cannot parse the `location` field in headers."))
+                                }
+                            }
+                        }
+                    }
+                    None => return Err(HttpRequestError::RedirectError("Cannot get the `location` field in headers."))
+                };
+
+                match status_code {
+                    301 | 302 => {
+                        return Self::send_request_inner(HttpRequestMethod::GET, location_url, max_response_body_size, max_redirect_count - 1, query, None, headers);
+                    }
+                    307 | 308 => {
+                        if has_body {
+                            eprintln!("Warning: HTTP body's redirection is not supported currently.");
+                        }
+                        return Self::send_request_inner(method, location_url, max_response_body_size, max_redirect_count - 1, query, None, headers);
+                    }
+                    _ => {
+                        return Err(HttpRequestError::RedirectError("Unsupported redirection status."));
+                    }
+                }
+            }
+        }
 
         let body = core.run(get_body(response.into_body(), max_response_body_size))?;
         // let body = core.run(response.into_body().concat2()).map_err(|err| HttpRequestError::HyperError(err))?.to_vec();
 
         Ok(HttpResponse {
             status_code,
-            headers,
+            headers: headers_raw_map,
             body,
         })
     }
@@ -265,7 +346,7 @@ impl<
     HK: Eq + Hash + AsRef<str>, HV: AsRef<str>> HttpRequest<QK, QV, BK, BV, HK, HV> {
     /// Send a request and preserve this sender so that it can be used again.
     pub fn send_preserved(&self) -> Result<HttpResponse, HttpRequestError> {
-        Self::send_request_inner(self.method, self.url.clone(), self.max_response_body_size, &self.query, self.body.clone(), &self.headers)
+        Self::send_request_inner(self.method, self.url.clone(), self.max_response_body_size, self.max_redirect_count, &self.query, self.body.clone(), &self.headers)
     }
 }
 
@@ -278,6 +359,7 @@ impl<
             method: self.method,
             url: self.url.clone(),
             max_response_body_size: self.max_response_body_size,
+            max_redirect_count: self.max_redirect_count,
             query: self.query.clone(),
             body: self.body.clone(),
             headers: self.headers.clone(),
