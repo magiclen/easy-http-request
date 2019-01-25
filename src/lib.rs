@@ -41,6 +41,8 @@ use std::hash::Hash;
 use std::io;
 use std::string;
 use std::fmt::Write;
+use std::net::IpAddr;
+use std::str::FromStr;
 
 use tokio_core::reactor;
 use hyper::Client;
@@ -53,6 +55,7 @@ use url::Url;
 
 const DEFAULT_MAX_RESPONSE_BODY_SIZE: usize = 1 * 1024 * 1024;
 const DEFAULT_MAX_REDIRECT_COUNT: usize = 5;
+const DEFAULT_ALLOW_LOCALHOST: bool = true;
 
 /// The http response.
 #[derive(Debug)]
@@ -72,6 +75,7 @@ pub enum HttpRequestError {
     RedirectError(&'static str),
     TooManyRedirect,
     TooLarge,
+    LocalhostNotAllow,
     Other(&'static str),
 }
 
@@ -96,6 +100,7 @@ pub struct HttpRequest<
     pub query: Option<HashMap<QK, QV>>,
     pub body: Option<HttpRequestBody<BK, BV>>,
     pub headers: Option<HashMap<HK, HV>>,
+    pub allow_localhost: bool,
 }
 
 impl<
@@ -111,6 +116,7 @@ impl<
             query: None,
             body: None,
             headers: None,
+            allow_localhost: DEFAULT_ALLOW_LOCALHOST,
         }
     }
 
@@ -166,10 +172,25 @@ impl<
 
     /// Send a request and drop this sender.
     pub fn send(self) -> Result<HttpResponse, HttpRequestError> {
-        Self::send_request_inner(self.method, self.url, self.max_response_body_size, self.max_redirect_count, &self.query, self.body, &self.headers)
+        Self::send_request_inner(self.method, self.url, self.max_response_body_size, self.max_redirect_count, &self.query, self.body, &self.headers, self.allow_localhost)
     }
 
-    fn send_request_inner(method: HttpRequestMethod, mut url: Url, max_response_body_size: usize, max_redirect_count: usize, query: &Option<HashMap<QK, QV>>, body: Option<HttpRequestBody<BK, BV>>, headers: &Option<HashMap<HK, HV>>) -> Result<HttpResponse, HttpRequestError> {
+    fn send_request_inner(method: HttpRequestMethod, mut url: Url, max_response_body_size: usize, max_redirect_count: usize, query: &Option<HashMap<QK, QV>>, body: Option<HttpRequestBody<BK, BV>>, headers: &Option<HashMap<HK, HV>>, allow_localhost: bool) -> Result<HttpResponse, HttpRequestError> {
+        if !allow_localhost {
+            if let Some(domain) = url.domain() {
+                match domain {
+                    "localhost" => return Err(HttpRequestError::LocalhostNotAllow),
+                    _ => {}
+                }
+            } else if let Some(host) = url.host() {
+                let ip = IpAddr::from_str(&host.to_string()).unwrap();
+
+                if is_local_ip(&ip) {
+                    return Err(HttpRequestError::LocalhostNotAllow);
+                }
+            }
+        }
+
         let mut request_builder = Request::builder();
 
         request_builder.method(method.get_str());
@@ -314,13 +335,13 @@ impl<
 
                 match status_code {
                     301 | 302 => {
-                        return Self::send_request_inner(HttpRequestMethod::GET, location_url, max_response_body_size, max_redirect_count - 1, query, None, headers);
+                        return Self::send_request_inner(HttpRequestMethod::GET, location_url, max_response_body_size, max_redirect_count - 1, query, None, headers, allow_localhost);
                     }
                     307 | 308 => {
                         if has_body {
                             eprintln!("Warning: HTTP body's redirection is not supported currently.");
                         }
-                        return Self::send_request_inner(method, location_url, max_response_body_size, max_redirect_count - 1, query, None, headers);
+                        return Self::send_request_inner(method, location_url, max_response_body_size, max_redirect_count - 1, query, None, headers, allow_localhost);
                     }
                     _ => {
                         return Err(HttpRequestError::RedirectError("Unsupported redirection status."));
@@ -346,7 +367,7 @@ impl<
     HK: Eq + Hash + AsRef<str>, HV: AsRef<str>> HttpRequest<QK, QV, BK, BV, HK, HV> {
     /// Send a request and preserve this sender so that it can be used again.
     pub fn send_preserved(&self) -> Result<HttpResponse, HttpRequestError> {
-        Self::send_request_inner(self.method, self.url.clone(), self.max_response_body_size, self.max_redirect_count, &self.query, self.body.clone(), &self.headers)
+        Self::send_request_inner(self.method, self.url.clone(), self.max_response_body_size, self.max_redirect_count, &self.query, self.body.clone(), &self.headers, self.allow_localhost)
     }
 }
 
@@ -363,6 +384,7 @@ impl<
             query: self.query.clone(),
             body: self.body.clone(),
             headers: self.headers.clone(),
+            allow_localhost: self.allow_localhost,
         }
     }
 }
@@ -388,4 +410,15 @@ fn get_body(body: hyper::Body, max_response_body_size: usize) -> Box<Future<Item
             chunk.to_vec()
         });
     Box::new(full_body)
+}
+
+fn is_local_ip(addr: &IpAddr) -> bool {
+    match addr {
+        IpAddr::V4(addr) => {
+            addr.is_private() || addr.is_loopback() || addr.is_link_local() || addr.is_broadcast() || addr.is_documentation() || addr.is_unspecified()
+        }
+        IpAddr::V6(addr) => {
+            addr.is_multicast() || addr.is_loopback() || addr.is_unspecified()
+        }
+    }
 }
