@@ -43,6 +43,7 @@ use std::string;
 use std::fmt::Write;
 use std::net::IpAddr;
 use std::str::FromStr;
+use std::time::{Duration, SystemTime};
 
 use tokio_core::reactor;
 use hyper::Client;
@@ -55,6 +56,7 @@ use url::Url;
 
 const DEFAULT_MAX_RESPONSE_BODY_SIZE: usize = 1 * 1024 * 1024;
 const DEFAULT_MAX_REDIRECT_COUNT: usize = 5;
+const DEFAULT_MAX_CONNECTION_TIME: u64 = 0;
 const DEFAULT_ALLOW_LOCALHOST: bool = true;
 
 /// The http response.
@@ -75,6 +77,7 @@ pub enum HttpRequestError {
     RedirectError(&'static str),
     TooManyRedirect,
     TooLarge,
+    TimeOut,
     LocalhostNotAllow,
     Other(&'static str),
 }
@@ -97,6 +100,8 @@ pub struct HttpRequest<
     /// The size limit of the response body.
     pub max_response_body_size: usize,
     pub max_redirect_count: usize,
+    /// The time limit in milliseconds of a connection. 0 means the time is unlimited.
+    pub max_connection_time: u64,
     pub query: Option<HashMap<QK, QV>>,
     pub body: Option<HttpRequestBody<BK, BV>>,
     pub headers: Option<HashMap<HK, HV>>,
@@ -113,6 +118,7 @@ impl<
             url,
             max_response_body_size: DEFAULT_MAX_RESPONSE_BODY_SIZE,
             max_redirect_count: DEFAULT_MAX_REDIRECT_COUNT,
+            max_connection_time: DEFAULT_MAX_CONNECTION_TIME,
             query: None,
             body: None,
             headers: None,
@@ -172,10 +178,10 @@ impl<
 
     /// Send a request and drop this sender.
     pub fn send(self) -> Result<HttpResponse, HttpRequestError> {
-        Self::send_request_inner(self.method, self.url, self.max_response_body_size, self.max_redirect_count, &self.query, self.body, &self.headers, self.allow_localhost)
+        Self::send_request_inner(self.method, self.url, self.max_response_body_size, self.max_redirect_count, self.max_connection_time, &self.query, self.body, &self.headers, self.allow_localhost)
     }
 
-    fn send_request_inner(method: HttpRequestMethod, mut url: Url, max_response_body_size: usize, max_redirect_count: usize, query: &Option<HashMap<QK, QV>>, body: Option<HttpRequestBody<BK, BV>>, headers: &Option<HashMap<HK, HV>>, allow_localhost: bool) -> Result<HttpResponse, HttpRequestError> {
+    fn send_request_inner(method: HttpRequestMethod, mut url: Url, max_response_body_size: usize, max_redirect_count: usize, max_connection_time: u64, query: &Option<HashMap<QK, QV>>, body: Option<HttpRequestBody<BK, BV>>, headers: &Option<HashMap<HK, HV>>, allow_localhost: bool) -> Result<HttpResponse, HttpRequestError> {
         if !allow_localhost {
             if let Some(domain) = url.domain() {
                 match domain {
@@ -266,9 +272,19 @@ impl<
             Client::builder().build::<_, hyper::Body>(https)
         };
 
+        let mut core = reactor::Core::new().map_err(|err| HttpRequestError::IOError(err))?;
+
+        let handle = core.handle();
+
+        let _timeout = reactor::Timeout::new(Duration::from_millis(max_connection_time), &handle).map_err(|err| HttpRequestError::IOError(err))?;
+
+        // TODO: implement HTTP header time out
+
+//        let timeout = timeout.then(|_| Err(HttpRequestError::TimedOut));
+
         let response = client.request(request);
 
-        let mut core = reactor::Core::new().map_err(|err| HttpRequestError::IOError(err))?;
+        let start_time = SystemTime::now();
 
         let response = core.run(response).map_err(|err| HttpRequestError::HyperError(err))?;
 
@@ -335,13 +351,13 @@ impl<
 
                 match status_code {
                     301 | 302 => {
-                        return Self::send_request_inner(HttpRequestMethod::GET, location_url, max_response_body_size, max_redirect_count - 1, query, None, headers, allow_localhost);
+                        return Self::send_request_inner(HttpRequestMethod::GET, location_url, max_response_body_size, max_redirect_count - 1, max_connection_time, query, None, headers, allow_localhost);
                     }
                     307 | 308 => {
                         if has_body {
                             eprintln!("Warning: HTTP body's redirection is not supported currently.");
                         }
-                        return Self::send_request_inner(method, location_url, max_response_body_size, max_redirect_count - 1, query, None, headers, allow_localhost);
+                        return Self::send_request_inner(method, location_url, max_response_body_size, max_redirect_count - 1, max_connection_time, query, None, headers, allow_localhost);
                     }
                     _ => {
                         return Err(HttpRequestError::RedirectError("Unsupported redirection status."));
@@ -350,7 +366,7 @@ impl<
             }
         }
 
-        let body = core.run(get_body(response.into_body(), max_response_body_size))?;
+        let body = core.run(get_body(response.into_body(), max_response_body_size, max_connection_time, start_time))?;
         // let body = core.run(response.into_body().concat2()).map_err(|err| HttpRequestError::HyperError(err))?.to_vec();
 
         Ok(HttpResponse {
@@ -367,7 +383,7 @@ impl<
     HK: Eq + Hash + AsRef<str>, HV: AsRef<str>> HttpRequest<QK, QV, BK, BV, HK, HV> {
     /// Send a request and preserve this sender so that it can be used again.
     pub fn send_preserved(&self) -> Result<HttpResponse, HttpRequestError> {
-        Self::send_request_inner(self.method, self.url.clone(), self.max_response_body_size, self.max_redirect_count, &self.query, self.body.clone(), &self.headers, self.allow_localhost)
+        Self::send_request_inner(self.method, self.url.clone(), self.max_response_body_size, self.max_redirect_count, self.max_connection_time, &self.query, self.body.clone(), &self.headers, self.allow_localhost)
     }
 }
 
@@ -381,6 +397,7 @@ impl<
             url: self.url.clone(),
             max_response_body_size: self.max_response_body_size,
             max_redirect_count: self.max_redirect_count,
+            max_connection_time: self.max_connection_time,
             query: self.query.clone(),
             body: self.body.clone(),
             headers: self.headers.clone(),
@@ -389,20 +406,43 @@ impl<
     }
 }
 
-fn get_body(body: hyper::Body, max_response_body_size: usize) -> Box<Future<Item=Vec<u8>, Error=HttpRequestError>> {
+fn get_body(body: hyper::Body, max_response_body_size: usize, max_connection_time: u64, start_time: SystemTime) -> Box<Future<Item=Vec<u8>, Error=HttpRequestError>> {
     let mut sum_size = 0;
+    let u64_max = u64::max_value() as u128;
     let chain = body.then(move |c| {
-        let c = c.map_err(|err| HttpRequestError::HyperError(err))?;
-        {
-            let c_ref = c.as_ref();
-            sum_size += c_ref.len();
-        }
-        let result = if sum_size > max_response_body_size {
-            Err(HttpRequestError::TooLarge)
+        let time_check = if max_connection_time > 0 {
+            match start_time.elapsed() {
+                Ok(elapsed) => {
+                    let millis = elapsed.as_millis();
+                    if millis > u64_max || millis as u64 > max_connection_time {
+                        Err(HttpRequestError::TimeOut)
+                    } else {
+                        Ok(())
+                    }
+                }
+                Err(_) => Err(HttpRequestError::Other("Cannot get the system elapsed time."))
+            }
         } else {
-            Ok(c)
+            Ok(())
         };
-        result
+        match time_check {
+            Ok(_) => {
+                let c = c.map_err(|err| HttpRequestError::HyperError(err))?;
+                {
+                    let c_ref = c.as_ref();
+                    sum_size += c_ref.len();
+                }
+                let result = if sum_size > max_response_body_size {
+                    Err(HttpRequestError::TooLarge)
+                } else {
+                    Ok(c)
+                };
+                result
+            }
+            Err(err) => {
+                Err(err)
+            }
+        }
     });
 
     let full_body = chain.concat2()
