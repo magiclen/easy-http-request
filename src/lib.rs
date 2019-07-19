@@ -29,6 +29,10 @@ pub extern crate futures;
 pub extern crate mime;
 pub extern crate slash_formatter;
 
+#[macro_use]
+extern crate lazy_static;
+extern crate num_cpus;
+
 mod http_request_method;
 mod http_request_body;
 
@@ -46,9 +50,9 @@ use std::str::FromStr;
 use std::time::{Duration, SystemTime};
 
 use tokio_core::reactor;
-use hyper::Client;
 use hyper::Body;
 use hyper::rt::Stream;
+use hyper::client::{Client, HttpConnector};
 use hyper_tls::HttpsConnector;
 use http::Request;
 use futures::future::Future;
@@ -58,6 +62,13 @@ const DEFAULT_MAX_RESPONSE_BODY_SIZE: usize = 1 * 1024 * 1024;
 const DEFAULT_MAX_REDIRECT_COUNT: usize = 5;
 const DEFAULT_MAX_CONNECTION_TIME: u64 = 0;
 const DEFAULT_ALLOW_LOCALHOST: bool = true;
+
+lazy_static! {
+    static ref CLIENT: Client<HttpsConnector<HttpConnector>> = {
+        let https = HttpsConnector::new(num_cpus::get()).unwrap();
+        Client::builder().build::<_, Body>(https)
+    };
+}
 
 /// The http response.
 #[derive(Debug)]
@@ -267,11 +278,6 @@ impl<
             }
         };
 
-        let client = {
-            let https = HttpsConnector::new(4).unwrap();
-            Client::builder().build::<_, hyper::Body>(https)
-        };
-
         let mut core = reactor::Core::new().map_err(|err| HttpRequestError::IOError(err))?;
 
         let handle = core.handle();
@@ -282,7 +288,7 @@ impl<
 
 //        let timeout = timeout.then(|_| Err(HttpRequestError::TimedOut));
 
-        let response = client.request(request);
+        let response = CLIENT.request(request);
 
         let start_time = SystemTime::now();
 
@@ -406,7 +412,7 @@ impl<
     }
 }
 
-fn get_body(body: hyper::Body, max_response_body_size: usize, max_connection_time: u64, start_time: SystemTime) -> Box<Future<Item=Vec<u8>, Error=HttpRequestError>> {
+fn get_body(body: hyper::Body, max_response_body_size: usize, max_connection_time: u64, start_time: SystemTime) -> Box<dyn Future<Item=Vec<u8>, Error=HttpRequestError>> {
     let mut sum_size = 0;
     let u64_max = u64::max_value() as u128;
     let chain = body.then(move |c| {
