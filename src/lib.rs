@@ -21,7 +21,6 @@ More examples are in the `examples` directory.
 */
 
 pub extern crate url;
-pub extern crate http;
 pub extern crate hyper;
 pub extern crate hyper_tls;
 pub extern crate tokio_core;
@@ -50,11 +49,10 @@ use std::str::FromStr;
 use std::time::{Duration, SystemTime};
 
 use tokio_core::reactor;
-use hyper::Body;
+use hyper::{Body, Request};
 use hyper::rt::Stream;
 use hyper::client::{Client, HttpConnector};
 use hyper_tls::HttpsConnector;
-use http::Request;
 use futures::future::Future;
 use url::Url;
 
@@ -81,7 +79,7 @@ pub struct HttpResponse {
 #[derive(Debug)]
 pub enum HttpRequestError {
     UrlParseError(url::ParseError),
-    HttpError(http::Error),
+    HttpError(hyper::http::Error),
     HyperError(hyper::Error),
     IOError(io::Error),
     FromUtf8Error(string::FromUtf8Error),
