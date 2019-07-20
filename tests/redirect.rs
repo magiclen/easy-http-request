@@ -4,5 +4,7 @@ use easy_http_request::DefaultHttpRequest;
 
 #[test]
 fn test_redirect() {
-    DefaultHttpRequest::get_from_url_str("https://cloud.magiclen.org").unwrap().send().unwrap();
+    let response = DefaultHttpRequest::get_from_url_str("https://u.magiclen.org/github").unwrap().send().unwrap();
+
+    assert_eq!(200, response.status_code);
 }

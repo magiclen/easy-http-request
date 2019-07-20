@@ -16,6 +16,7 @@ pub enum HttpRequestMethod {
 }
 
 impl HttpRequestMethod {
+    #[inline]
     pub fn get_str(&self) -> &'static str {
         match self {
             HttpRequestMethod::GET => "GET",
@@ -28,6 +29,7 @@ impl HttpRequestMethod {
 }
 
 impl Display for HttpRequestMethod {
+    #[inline]
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
         f.write_str(self.get_str())
     }
