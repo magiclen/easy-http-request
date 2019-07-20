@@ -164,30 +164,30 @@ impl<
     }
 
     fn send_request_inner(method: HttpRequestMethod, mut url: Url, query: &Option<HashMap<QK, QV>>, body: &Option<HttpRequestBody<BK, BV>>, headers: &Option<HashMap<HK, HV>>, options: &HttpRequestOptions, redirection_counter: usize) -> Result<HttpResponse, HttpRequestError> {
-        let host = match url.host() {
-            Some(host) => host,
-            None => return Err(HttpRequestError::Other("A valid HTTP URL needs contains a host."))
-        };
-
-        if !options.allow_local {
-            match host {
-                Host::Ipv4(ipv4) => {
-                    if is_local_ipv4(&ipv4) {
-                        return Err(HttpRequestError::LocalNotAllow);
-                    }
-                }
-                Host::Ipv6(ipv6) => {
-                    if is_local_ipv6(&ipv6) {
-                        return Err(HttpRequestError::LocalNotAllow);
-                    }
-                }
-                Host::Domain(domain) => {
-                    match domain {
-                        "localhost" => return Err(HttpRequestError::LocalNotAllow),
-                        _ => ()
+        match url.host() {
+            Some(host) => {
+                if !options.allow_local {
+                    match host {
+                        Host::Ipv4(ipv4) => {
+                            if is_local_ipv4(&ipv4) {
+                                return Err(HttpRequestError::LocalNotAllow);
+                            }
+                        }
+                        Host::Ipv6(ipv6) => {
+                            if is_local_ipv6(&ipv6) {
+                                return Err(HttpRequestError::LocalNotAllow);
+                            }
+                        }
+                        Host::Domain(domain) => {
+                            match domain {
+                                "localhost" => return Err(HttpRequestError::LocalNotAllow),
+                                _ => ()
+                            }
+                        }
                     }
                 }
             }
+            None => return Err(HttpRequestError::Other("A valid HTTP URL needs contains a host."))
         }
 
         if let Some(map) = query {
@@ -242,7 +242,7 @@ impl<
             }
         }
 
-        let body_owner;
+        let mut body_owner = None;
 
         if let Some(body) = body {
             match body {
@@ -265,7 +265,7 @@ impl<
                     request = request.body(Body::BufBody(body.as_ref(), body_size));
                 }
                 HttpRequestBody::FormURLEncoded(map) => {
-                    body_owner = {
+                    let query = {
                         let mut url = Url::parse("q:").map_err(|err| HttpRequestError::UrlParseError(err))?;
                         {
                             let mut query = url.query_pairs_mut();
@@ -283,11 +283,15 @@ impl<
 
                     request_headers.set_raw("Content-Type", vec![b"x-www-form-urlencoded".to_vec()]);
 
-                    let body_size = body_owner.len();
+                    let body_size = query.len();
 
                     request_headers.set_raw("Content-Length", vec![body_size.to_string().into_bytes()]);
 
-                    request = request.body(Body::BufBody(body_owner.as_ref(), body_size));
+                    body_owner = Some(query);
+
+                    if let Some(body) = body_owner.as_ref() {
+                        request = request.body(Body::BufBody(body.as_ref(), body_size));
+                    }
                 }
             }
         }
@@ -374,12 +378,16 @@ impl<
 
                 match status_code {
                     303 => {
+                        drop(headers_raw_map);
+                        drop(body_owner);
                         drop(response);
                         drop(client);
 
                         return Self::send_request_inner(HttpRequestMethod::GET, location_url, query, &None, headers, options, redirection_counter);
                     }
                     301 | 302 | 307 | 308 => {
+                        drop(headers_raw_map);
+                        drop(body_owner);
                         drop(response);
                         drop(client);
 
@@ -427,8 +435,6 @@ impl<
             body,
         })
     }
-
-
 }
 
 #[inline]
