@@ -28,6 +28,9 @@ pub extern crate slash_formatter;
 pub extern crate url;
 
 #[macro_use]
+extern crate educe;
+
+#[macro_use]
 extern crate derivative;
 
 mod http_request_method;
@@ -71,8 +74,9 @@ pub type DefaultHttpRequest = HttpRequest<String, String, String, String, String
 pub type StaticHttpRequest = HttpRequest<&'static str, &'static str, &'static str, &'static str, &'static str, &'static str>;
 
 /// The http request sender. See `DefaultHttpRequest` or `StaticHttpRequest`.
-#[derive(Derivative)]
-#[derivative(Debug, Clone)]
+#[derive(Derivative, Educe)]
+#[derivative(Clone)]
+#[educe(Debug(bound))]
 pub struct HttpRequest<
     QK = String, QV = String,
     BK = String, BV = String,

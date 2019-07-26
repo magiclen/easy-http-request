@@ -15,6 +15,7 @@ travis-ci = { repository = "magiclen/easy-http-request", branch = "master" }
 appveyor = { repository = "magiclen/easy-http-request", branch = "master", service = "github" }
 
 [dependencies]
+educe = ">=0.0.2"
 derivative = "1"
 url = "1"
 hyper = "0.10"
