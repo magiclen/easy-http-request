@@ -1,6 +1,6 @@
 [package]
 name = "easy-http-request"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["Magic Len <len@magiclen.org>"]
 repository = "https://github.com/magiclen/easy-http-request"
 homepage = "https://magiclen.org/easy-http-request"
@@ -10,9 +10,9 @@ description= "Easy to send HTTP/HTTPS requests."
 readme = "README.md"
 license = "MIT"
 
-[badges]
-travis-ci = { repository = "magiclen/easy-http-request", branch = "master" }
-appveyor = { repository = "magiclen/easy-http-request", branch = "master", service = "github" }
+[badges.travis-ci]
+repository = "magiclen/easy-http-request"
+branch = "master"
 
 [dependencies]
 educe = ">=0.0.2"
