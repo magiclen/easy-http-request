@@ -1,5 +1,5 @@
-use std::hash::Hash;
 use std::collections::HashMap;
+use std::hash::Hash;
 
 use mime::Mime;
 
@@ -21,14 +21,24 @@ pub enum HttpRequestBody<BK: Eq + Hash + AsRef<str>, BV: AsRef<str>> {
 impl<BK: Eq + Hash + AsRef<str> + Clone, BV: AsRef<str> + Clone> Clone for HttpRequestBody<BK, BV> {
     fn clone(&self) -> HttpRequestBody<BK, BV> {
         match self {
-            HttpRequestBody::Binary { content_type, body } => HttpRequestBody::Binary {
-                content_type: content_type.clone(),
-                body: body.clone(),
-            },
-            HttpRequestBody::Text { content_type, body } => HttpRequestBody::Text {
-                content_type: content_type.clone(),
-                body: body.clone(),
-            },
+            HttpRequestBody::Binary {
+                content_type,
+                body,
+            } => {
+                HttpRequestBody::Binary {
+                    content_type: content_type.clone(),
+                    body: body.clone(),
+                }
+            }
+            HttpRequestBody::Text {
+                content_type,
+                body,
+            } => {
+                HttpRequestBody::Text {
+                    content_type: content_type.clone(),
+                    body: body.clone(),
+                }
+            }
             HttpRequestBody::FormURLEncoded(map) => {
                 let mut new_map = HashMap::new();
 

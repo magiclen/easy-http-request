@@ -5,7 +5,10 @@ use easy_http_request::DefaultHttpRequest;
 #[test]
 fn test_head() {
     DefaultHttpRequest::head_from_url_str("https://magiclen.org").unwrap().send().unwrap();
-    DefaultHttpRequest::head_from_url_str("https://magiclen.org").unwrap().send_preserved().unwrap();
+    DefaultHttpRequest::head_from_url_str("https://magiclen.org")
+        .unwrap()
+        .send_preserved()
+        .unwrap();
 }
 
 #[test]

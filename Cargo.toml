@@ -1,7 +1,8 @@
 [package]
 name = "easy-http-request"
-version = "0.2.3"
+version = "0.2.5"
 authors = ["Magic Len <len@magiclen.org>"]
+edition = "2018"
 repository = "https://github.com/magiclen/easy-http-request"
 homepage = "https://magiclen.org/easy-http-request"
 keywords = ["http", "https", "request", "hyper"]

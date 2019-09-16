@@ -17,7 +17,7 @@ pub enum HttpRequestMethod {
 
 impl HttpRequestMethod {
     #[inline]
-    pub fn get_str(&self) -> &'static str {
+    pub fn get_str(self) -> &'static str {
         match self {
             HttpRequestMethod::GET => "GET",
             HttpRequestMethod::POST => "POST",

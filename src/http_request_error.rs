@@ -1,6 +1,6 @@
 use std::io::Error as IOError;
 
-use hyper::error::{ParseError, Error as HyperError};
+use hyper::error::{Error as HyperError, ParseError};
 
 /// Errors for `HttpRequest`.
 #[derive(Debug)]
@@ -15,14 +15,12 @@ pub enum HttpRequestError {
     Other(&'static str),
 }
 
-
 impl From<ParseError> for HttpRequestError {
     #[inline]
     fn from(error: ParseError) -> Self {
         HttpRequestError::UrlParseError(error)
     }
 }
-
 
 impl From<HyperError> for HttpRequestError {
     #[inline]
