@@ -1,3 +1,5 @@
+use std::error::Error;
+use std::fmt::{Display, Error as FmtError, Formatter};
 use std::io::Error as IOError;
 
 use hyper::error::{Error as HyperError, ParseError};
@@ -35,3 +37,21 @@ impl From<IOError> for HttpRequestError {
         HttpRequestError::IOError(error)
     }
 }
+
+impl Display for HttpRequestError {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), FmtError> {
+        match self {
+            HttpRequestError::UrlParseError(err) => Display::fmt(err, f),
+            HttpRequestError::HyperError(err) => Display::fmt(err, f),
+            HttpRequestError::IOError(err) => Display::fmt(err, f),
+            HttpRequestError::RedirectError(text) => f.write_str(text),
+            HttpRequestError::TooLarge => f.write_str("Remote data is too large."),
+            HttpRequestError::TimeOut => f.write_str("The connection has timed out."),
+            HttpRequestError::LocalNotAllow => f.write_str("Local addresses are not allowed."),
+            HttpRequestError::Other(text) => f.write_str(text),
+        }
+    }
+}
+
+impl Error for HttpRequestError {}
