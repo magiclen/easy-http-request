@@ -1,6 +1,6 @@
 [package]
 name = "easy-http-request"
-version = "0.2.6"
+version = "0.2.7"
 authors = ["Magic Len <len@magiclen.org>"]
 edition = "2018"
 repository = "https://github.com/magiclen/easy-http-request"
@@ -20,7 +20,7 @@ url = "1"
 hyper = "0.10"
 hyper-native-tls = "0.3"
 mime = "0.3"
-slash-formatter = "2"
+slash-formatter = "3"
 
 [dependencies.educe]
 version = ">=0.4.0"

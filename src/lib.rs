@@ -417,7 +417,7 @@ impl<
                                 }
                             }
 
-                            slash_formatter::concat_with_slash_mut(&mut location_url, location);
+                            slash_formatter::concat_with_slash_in_place(&mut location_url, location);
 
                             match Url::parse(&location_url) {
                                 Ok(location_url) => location_url,
