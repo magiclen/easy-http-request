@@ -1,6 +1,6 @@
 [package]
 name = "easy-http-request"
-version = "0.2.7"
+version = "0.2.8"
 authors = ["Magic Len <len@magiclen.org>"]
 edition = "2018"
 repository = "https://github.com/magiclen/easy-http-request"
@@ -10,6 +10,7 @@ categories = ["web-programming::http-client"]
 description= "Easy to send HTTP/HTTPS requests."
 readme = "README.md"
 license = "MIT"
+include = ["src/**/*", "Cargo.toml"]
 
 [badges.travis-ci]
 repository = "magiclen/easy-http-request"
