@@ -1,6 +1,7 @@
 use std::fmt::{self, Display, Formatter};
 
 /// The HTTP request method.
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum HttpRequestMethod {
     /// Get resources.
