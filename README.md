@@ -1,7 +1,7 @@
 Easy HTTP Request
 ====================
 
-[![Build Status](https://travis-ci.org/magiclen/easy-http-request.svg?branch=master)](https://travis-ci.org/magiclen/easy-http-request)
+[![CI](https://github.com/magiclen/easy-http-request/actions/workflows/ci.yml/badge.svg)](https://github.com/magiclen/easy-http-request/actions/workflows/ci.yml)
 
 Easy to send HTTP/HTTPS requests.
 
