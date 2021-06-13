@@ -195,7 +195,6 @@ impl<
         )
     }
 
-    #[allow(clippy::cognitive_complexity)]
     fn send_request_inner(
         method: HttpRequestMethod,
         mut url: Url,
