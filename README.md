@@ -5,6 +5,10 @@ Easy HTTP Request
 
 Easy to send HTTP/HTTPS requests.
 
+**This crate was deprecated, use `reqwest` instead.**
+
+**https://crates.io/crates/reqwest**
+
 ## Example
 
 ```rust
